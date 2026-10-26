@@ -4,8 +4,10 @@ A controlled comparison of a GAN, a diffusion-type model trained from scratch, a
 diffusion model on the same task, data, and metrics: given a line-art sketch and a color reference
 image of the same character, color the sketch so it matches the reference.
 
-**Status:** planning stage (checkpoint 1, 25 Oct 2026). Problem, dataset, models, and protocol are
-designed; no training code or results yet. See [`Reference-Based Anime Line-Art Colorization.md`](<Reference-Based Anime Line-Art Colorization.md>)
+**Status (26 Oct 2026):** after checkpoint 1. Setup, Model C (SD1.5 + ControlNet + IP-Adapter),
+the shared evaluation suite, tuning/LoRA scripts, plots and the user-study tooling are written and
+unit-tested (`uv run pytest -q`). Nothing has run on Kaggle yet. The shared data loader, Models A/B
+and `sample.py` are still to do. No results yet. See [`Reference-Based Anime Line-Art Colorization.md`](<Reference-Based Anime Line-Art Colorization.md>)
 for the full design document — task definition, dataset, model architectures, evaluation plan, task
 assignment, and timeline.
 
