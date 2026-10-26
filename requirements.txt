@@ -1,0 +1,18 @@
+# Kaggle install: `pip install -q -r requirements.txt`
+# torch / torchvision are intentionally NOT listed: Kaggle images ship a CUDA build, and
+# reinstalling from PyPI would replace it. Keep lower bounds in sync with pyproject.toml.
+diffusers>=0.30
+transformers>=4.41
+accelerate>=0.30
+peft>=0.11
+safetensors
+lpips>=0.1.4
+torchmetrics>=1.3
+clean-fid>=0.1.35
+opencv-python-headless>=4.8
+scipy
+pandas
+matplotlib
+pyyaml
+tqdm
+tabulate

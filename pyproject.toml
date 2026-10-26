@@ -1,0 +1,36 @@
+[project]
+name = "anime-ref-colorization"
+version = "0.1.0"
+description = "Reference-based anime line-art colorization: GAN vs flow matching vs SD1.5 + ControlNet + IP-Adapter"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.1",
+    "torchvision>=0.16",
+    "diffusers>=0.30",
+    "transformers>=4.41",
+    "accelerate>=0.30",
+    "peft>=0.11",
+    "safetensors",
+    "lpips>=0.1.4",
+    "torchmetrics>=1.3",
+    "clean-fid>=0.1.35",
+    "opencv-python-headless>=4.8",
+    "numpy",
+    "pillow",
+    "scipy",
+    "pandas",
+    "matplotlib",
+    "pyyaml",
+    "tqdm",
+    "tabulate",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
