@@ -6,6 +6,7 @@
 Inputs
     outputs/<model>/<mode>/<id>_s<seed>.png           written by sample.py
     <eval-dir>/gt|sketch|ref_<mode>/<id>.png          written by export_eval_assets.py
+                                                      (scored ids = those in ref_<mode>/, else all of gt/)
 Output
     one appended row in results/<model>_<mode>.csv
 
@@ -161,7 +162,13 @@ def evaluate(args) -> dict:
 
     gt = index_by_id(args.eval_dir / "gt")
     index = index_outputs(pred_dir)
-    ids = sorted(gt)
+    # gt/ holds both test sets; ref_<mode>/ lists the ids this mode is scored on (export_eval_assets.py).
+    mode_refs = args.eval_dir / f"ref_{args.mode}"
+    ids = sorted(index_by_id(mode_refs)) if mode_refs.is_dir() else sorted(gt)
+    other_set = [i for i in index if i in gt and i not in set(ids)]
+    if other_set:
+        warnings.warn(f"ignoring {len(other_set)} outputs from the other test set, e.g. {other_set[:2]}")
+        index = {i: v for i, v in index.items() if i not in set(other_set)}
     items = collect_items(index, ids, args.allow_partial)
     present_ids = [i for i in ids if i in index]
 

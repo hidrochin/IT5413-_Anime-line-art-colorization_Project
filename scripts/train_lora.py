@@ -15,7 +15,6 @@ ControlNetColorizer (`model.lora_path`) is exported to <output_dir>/lora.
 
 import argparse
 import csv
-import random
 import shutil
 import time
 from pathlib import Path
@@ -24,43 +23,12 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import yaml
-from torch.utils.data import DataLoader, Sampler
+from torch.utils.data import DataLoader
 
 from src.models.controlnet.colorizer import ControlNetConfig, build_pipeline, encode_reference, prepare_control, upsample
+from src.utils.checkpoint import EpochSampler, rng_state, set_rng_state
 from src.utils.registry import DEFAULT_DATASET, load_object
 from src.utils.seeding import seed_everything
-
-
-class EpochSampler(Sampler):
-    """Seeded permutation per epoch that can start mid-epoch, so a resumed run continues the same order."""
-
-    def __init__(self, n: int, seed: int):
-        self.n, self.seed, self.epoch, self.start = n, seed, 0, 0
-
-    def set_position(self, epoch: int, start: int) -> None:
-        self.epoch, self.start = epoch, start
-
-    def __iter__(self):
-        g = torch.Generator().manual_seed(self.seed + self.epoch)
-        return iter(torch.randperm(self.n, generator=g).tolist()[self.start :])
-
-    def __len__(self) -> int:
-        return self.n - self.start
-
-
-def rng_state() -> dict:
-    state = {"python": random.getstate(), "numpy": np.random.get_state(), "torch": torch.get_rng_state()}
-    if torch.cuda.is_available():
-        state["cuda"] = torch.cuda.get_rng_state_all()
-    return state
-
-
-def set_rng_state(state: dict) -> None:
-    random.setstate(state["python"])
-    np.random.set_state(state["numpy"])
-    torch.set_rng_state(state["torch"])
-    if "cuda" in state and torch.cuda.is_available():
-        torch.cuda.set_rng_state_all(state["cuda"])
 
 
 def save_state(out_dir: Path, unet, optimizer, scaler, progress: dict) -> None:

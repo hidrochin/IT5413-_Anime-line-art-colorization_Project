@@ -69,6 +69,17 @@ def test_missing_outputs(eval_tree):
     assert row["n_ids"] == 3
 
 
+def test_mode_scores_only_its_own_test_set(eval_tree):
+    # A cross_ref-only image (another test set) in gt/: self_ref must neither require nor score it.
+    import shutil
+
+    eval_dir = eval_tree / "data/eval"
+    shutil.copy(eval_dir / "gt/img000.png", eval_dir / "gt/xchar__face_0.png")
+    row = run(eval_tree, "--model", "gt", "--mode", "self_ref", "--metrics", "psnr",
+              "--pred-dir", str(eval_dir / "gt"), "--out", str(eval_tree / "gt.csv"))
+    assert row["n_ids"] == 4
+
+
 def test_ground_truth_as_sanity_run(eval_tree):
     row = run(eval_tree, "--model", "gt", "--mode", "self_ref", "--metrics", "psnr,edge_f1,diversity",
               "--pred-dir", str(eval_tree / "data/eval/gt"), "--out", str(eval_tree / "gt.csv"))

@@ -139,6 +139,10 @@ class ControlNetColorizer(Colorizer):
     def do_cfg(self) -> bool:
         return self.cfg.guidance_scale > 1.0
 
+    def nfe(self, steps: int | None = None) -> int:
+        """U-Net (+ ControlNet) passes per image; CFG doubles them."""
+        return (steps or self.cfg.steps) * (2 if self.do_cfg else 1)
+
     def ip_adapter_embeds(self, reference: Tensor) -> list[Tensor]:
         """Per-sample embeddings in the pipeline's `ip_adapter_image_embeds` format: a list (one entry
         per IP-Adapter) of (B, 1, ...) tensors, negatives first when CFG is on. Passing images instead

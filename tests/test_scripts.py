@@ -72,9 +72,13 @@ def test_tune_coordinate_search_and_resume(tmp_path, monkeypatch):
 def test_export_eval_assets(tmp_path, monkeypatch):
     import scripts.export_eval_assets as export
 
-    run_main(monkeypatch, export, "--split", "test", "--out", str(tmp_path), "--dataset", "tests.fake_data:build_dataset")
-    for sub in ("gt", "sketch", "ref_self_ref", "ref_cross_ref"):
+    run_main(monkeypatch, export, "--out", str(tmp_path), "--dataset", "tests.fake_data:build_dataset")
+    for sub in ("ref_self_ref", "ref_cross_ref", "ref_shuffled_ref"):
         assert len(list((tmp_path / sub).glob("*.png"))) == 4
+    # gt/ and sketch/ hold both test sets: test (self/shuffled) and test_cross (cross_ref)
+    for sub in ("gt", "sketch"):
+        assert len(list((tmp_path / sub).glob("*.png"))) == 8
+    assert {p.stem for p in (tmp_path / "ref_cross_ref").glob("*.png")} == {f"test_cross{i:03d}" for i in range(4)}
 
 
 def write_results(results: Path):
