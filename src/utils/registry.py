@@ -6,7 +6,7 @@ from typing import Any
 DEFAULT_DATASET = "src.data:build_dataset"
 
 
-_HINT = ("The shared Dataset (src/data, owner: Cường) must expose build_dataset(split, mode) "
+_HINT = ("The shared Dataset (src/data) must expose build_dataset(split, mode) "
          "returning dicts with id/sketch/target/reference.")
 
 

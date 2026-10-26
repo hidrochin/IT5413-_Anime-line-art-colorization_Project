@@ -1,4 +1,4 @@
-# Model C: SD1.5 + ControlNet line-art-anime + IP-Adapter. Owner: Thịnh.
+# Model C: SD1.5 + ControlNet line-art-anime + IP-Adapter.
 # `model:` maps 1:1 to ControlNetConfig (src/models/controlnet/colorizer.py).
 name: controlnet
 

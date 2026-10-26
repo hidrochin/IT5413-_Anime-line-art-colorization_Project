@@ -1,4 +1,4 @@
-"""Generate test outputs for any model through the shared Colorizer interface (owner: Thành).
+"""Generate test outputs for any model through the shared Colorizer interface.
 
     python -m scripts.sample --config configs/gan.yaml --mode self_ref cross_ref shuffled_ref
     python -m scripts.sample --config results/tune_controlnet_best.yaml --model controlnet --mode self_ref

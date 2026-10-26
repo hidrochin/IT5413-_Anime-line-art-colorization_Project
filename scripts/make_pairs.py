@@ -1,4 +1,4 @@
-"""Write splits/cross_ref_pairs.csv (for test_cross) and splits/shuffled_ref_pairs.csv (for test). Owner: Cường.
+"""Write splits/cross_ref_pairs.csv (for test_cross) and splits/shuffled_ref_pairs.csv (for test).
 
     python -m scripts.make_pairs --root data/AnimeFaceColorization
 

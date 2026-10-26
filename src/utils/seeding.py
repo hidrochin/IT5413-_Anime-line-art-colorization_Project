@@ -1,4 +1,4 @@
-"""The single source of evaluation seeds (fairness contract rule 2). Owner: Thành."""
+"""The single source of evaluation seeds (fairness contract rule 2)."""
 
 import random
 
