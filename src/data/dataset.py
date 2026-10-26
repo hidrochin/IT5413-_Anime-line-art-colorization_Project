@@ -1,4 +1,4 @@
-"""Shared Dataset for all three models (owner: Cường).
+"""Shared Dataset for all three models.
 
 Image ids are "<group>__<stem>", where <group> is a folder of the HF mirror
 (ComputerVisionAnimeProject/AnimeFaceColorization):

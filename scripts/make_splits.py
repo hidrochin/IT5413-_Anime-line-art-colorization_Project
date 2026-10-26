@@ -1,4 +1,4 @@
-"""Write splits/{train,val,test,test_cross}.txt once, with a fixed seed (fairness rule 3). Owner: Cường.
+"""Write splits/{train,val,test,test_cross}.txt once, with a fixed seed (fairness rule 3).
 
     python -m scripts.make_splits --root data/AnimeFaceColorization
     python -m scripts.make_splits --n-test 10 --n-val 10 --cross-chars 2 --cross-per-char 5 --out data/sample_splits

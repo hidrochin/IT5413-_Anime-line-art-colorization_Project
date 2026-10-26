@@ -1,4 +1,4 @@
-"""Shared interface every model implements (frozen in week 1; owner: Thành).
+"""Shared interface every model implements (frozen in week 1).
 
 Keep this signature identical across models: sample.py relies on it to treat A, B and C the same way.
 """
