@@ -1,0 +1,59 @@
+# Model C: SD1.5 + ControlNet line-art-anime + IP-Adapter. Owner: Thịnh.
+# `model:` maps 1:1 to ControlNetConfig (src/models/controlnet/colorizer.py).
+name: controlnet
+
+model:
+  base_model: stable-diffusion-v1-5/stable-diffusion-v1-5
+  controlnet: lllyasviel/control_v11p_sd15s2_lineart_anime
+  ip_adapter_repo: h94/IP-Adapter
+  ip_adapter_subfolder: models
+  ip_adapter_weight: ip-adapter_sd15.bin   # fallback if colors are ignored: ip-adapter-plus_sd15.bin
+  ip_adapter_scale: 0.6
+  controlnet_scale: 1.0
+  guidance_scale: 7.0
+  steps: 20
+  clip_skip: 1
+  prompt: "anime character face, flat colors, best quality"
+  negative_prompt: "lowres, worst quality, low quality, blurry, monochrome, grayscale"
+  invert_sketch: true
+  lora_path: null          # e.g. checkpoints/controlnet_lora/lora after train_lora.py
+  lora_scale: 1.0
+  dtype: float16
+  device: cuda
+
+# scripts/tune_controlnet.py: coordinate search on val (one parameter at a time, in `order`,
+# holding the others at their current best). Never tune on test.
+tune:
+  split: val
+  num_images: 200
+  batch_size: 4
+  seed: 0
+  select_by: lpips          # lower is better
+  order: [base_model, ip_adapter_scale, controlnet_scale, guidance_scale, steps]
+  grid:
+    base_model:
+      - stable-diffusion-v1-5/stable-diffusion-v1-5
+      # - <anime SD1.5 base in diffusers format>  # add one here; pick on val (CLAUDE.md open question)
+    ip_adapter_scale: [0.4, 0.6, 0.8, 1.0]
+    controlnet_scale: [0.6, 0.8, 1.0, 1.2]
+    guidance_scale: [3.0, 5.0, 7.0, 9.0]
+    steps: [10, 20, 30]
+
+# scripts/train_lora.py: rank-8 LoRA on the U-Net attention, ControlNet + IP-Adapter frozen in the loop.
+lora:
+  output_dir: checkpoints/controlnet_lora
+  rank: 8
+  alpha: 8
+  target_modules: [to_q, to_k, to_v, to_out.0]
+  learning_rate: 1.0e-4
+  weight_decay: 1.0e-2
+  batch_size: 4
+  grad_accum: 2
+  max_steps: 6000
+  ref_drop_prob: 0.05       # keep the zero-image (CFG) branch meaningful
+  max_grad_norm: 1.0
+  gradient_checkpointing: true
+  num_workers: 2
+  seed: 0
+  log_every: 50
+  ckpt_every_min: 30

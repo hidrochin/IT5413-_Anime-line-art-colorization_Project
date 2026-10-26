@@ -1,2 +1,19 @@
 *.pdf
 CLAUDE.md
+*.pptx
+
+# Python / tooling
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
+
+# Large artifacts: never committed
+# (anchored with a leading slash so src/data/ is still tracked)
+/data/
+/outputs/
+/checkpoints/
+/wandb/
+.env
