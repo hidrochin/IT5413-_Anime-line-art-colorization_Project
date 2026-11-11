@@ -1,0 +1,43 @@
+# Model B: latent rectified flow + DINOv2 reference cross-attention, trained from scratch.
+# `model:` maps 1:1 to FlowConfig (src/models/flow/colorizer.py), used by scripts/sample.py.
+# `arch:` maps 1:1 to FlowNetConfig (src/models/flow/model.py), used by scripts/train_flow.py
+#   (the architecture is stored in every checkpoint, so sampling never reads this section).
+# `train:` is read by scripts/train_flow.py (see DEFAULTS there).
+name: flow
+
+model:
+  checkpoint: checkpoints/flow/flow_ema.pt   # or a checkpoints/ folder / step_*.pt file
+  use_ema: true
+  steps: 32               # Euler steps; RQ2 sweeps 1, 2, 4, 8, 16, 32, 50 with sample.py --steps
+  guidance_scale: 2.0     # CFG weight w; 1.0 = no guidance (ablation). Tune on val.
+  vae: stabilityai/sd-vae-ft-mse
+  dtype: float16
+  device: cuda
+
+arch:
+  ref_encoder: dinov2     # ablation: clip
+  block_out_channels: [128, 256, 384, 512]   # ~111M params; fallback if too slow: [128, 256, 256, 384] (~69M)
+  layers_per_block: 2
+  head_dim: 64
+
+train:
+  output_dir: checkpoints/flow
+  latents_dir: data/latents
+  batch_size: 64
+  learning_rate: 1.0e-4
+  weight_decay: 0.0
+  warmup_steps: 1000
+  max_steps: 150000       # re-estimate from it_s in log.csv after the first session (budget ~50 GPU-h)
+  ema_decay: 0.9999
+  cond_drop_prob: 0.1
+  logit_normal: true
+  max_grad_norm: 1.0
+  reference_aug: true     # ablation "no warp": false
+  num_workers: 4
+  seed: 0
+  log_every: 100
+  sample_every: 2000
+  num_val: 8
+  val_steps: 16
+  val_guidance: 2.0
+  ckpt_every_min: 30
