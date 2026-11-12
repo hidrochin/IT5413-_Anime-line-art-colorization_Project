@@ -174,3 +174,33 @@ def test_train_rejects_missing_latents(tmp_path, monkeypatch):
                                 "batch_size": 2, "num_workers": 0}}))
     with pytest.raises(KeyError, match="no cached latents"):
         run_train(monkeypatch, tmp_path)
+
+
+def test_gpu_tps_matches_shared_cpu_tps():
+    import numpy as np
+
+    from src.data.warp import tps_grid
+    from src.models.flow.augment import lattice, tps_apply, tps_solve
+
+    rng = np.random.default_rng(0)
+    h = w = 64
+    dst = lattice(h, w, 4, "cpu", torch.float64)
+    src = dst + torch.from_numpy(rng.normal(0, 4, dst.shape))
+    map_x, map_y = tps_grid(src.numpy(), dst.numpy(), h, w)
+    ys, xs = torch.meshgrid(torch.arange(h, dtype=torch.float64), torch.arange(w, dtype=torch.float64), indexing="ij")
+    out = tps_apply(tps_solve(src[None], dst), dst, torch.stack([xs, ys], -1).view(1, -1, 2)).view(h, w, 2)
+    assert np.allclose(out[..., 0].numpy(), map_x, atol=1e-3) and np.allclose(out[..., 1].numpy(), map_y, atol=1e-3)
+
+
+def test_gpu_augment_identity_flip_and_randomness():
+    from src.models.flow.augment import augment_reference_gpu
+
+    img = torch.rand(3, 3, 64, 64) * 2 - 1
+    same = augment_reference_gpu(img, tps_strength=0, flip_prob=0, min_crop=1)
+    assert torch.allclose(same, img, atol=1e-5)
+    flipped = augment_reference_gpu(img, tps_strength=0, flip_prob=1, min_crop=1)
+    assert torch.allclose(flipped, img.flip(-1), atol=1e-5)
+    g = torch.Generator().manual_seed(0)
+    warped = augment_reference_gpu(img, generator=g)
+    assert warped.shape == img.shape and warped.min() >= -1 and warped.max() <= 1
+    assert not torch.allclose(warped[0], warped[1])  # every sample gets its own warp

@@ -8,8 +8,9 @@
     # smoke run on 1,000 training images:
     python -m scripts.train_flow --config configs/flow.yaml --limit 1000 --max-steps 3000 --out checkpoints/flow_smoke
 
-Per step: sketch/target latents come from the cache (no VAE in the loop); the reference is re-warped by
-the shared loader (mode "train") and encoded by the frozen DINOv2. Loss: || v(x_t, t, z_S, c_R) - (z1 - eps) ||^2
+Per step: sketch/target latents come from the cache (no VAE in the loop); the loader decodes only the target
+image, which is re-warped on the GPU for the whole batch (src/models/flow/augment.py, same distribution as the
+shared src/data/warp.py; the CPU warp capped training at ~0.26 it/s on Kaggle) and encoded by the frozen DINOv2. Loss: || v(x_t, t, z_S, c_R) - (z1 - eps) ||^2
 with logit-normal t; c_R is replaced by learned null tokens with probability `cond_drop_prob` (for CFG).
 
 Writes to <output_dir>:
@@ -29,6 +30,8 @@ import torch
 import yaml
 from torch.utils.data import DataLoader, Dataset, Subset
 
+from src.data.dataset import ColorizationDataset, find_image, read_image
+from src.models.flow.augment import augment_reference_gpu
 from src.models.flow.model import (FlowNetConfig, ReferenceEncoder, build_flow_net, euler_sample, flow_matching_loss,
                                    num_params, sample_t)
 from src.utils.checkpoint import CheckpointManager, EpochSampler
@@ -64,17 +67,33 @@ DEFAULTS = {
 
 
 class LatentPairs(Dataset):
-    """Shared training samples (fresh random reference warp each read) + the row of their cached latents."""
+    """Training targets + the row of their cached latents. Only the target image is decoded here: the
+    sketch comes from the latent cache and the reference warp runs batched on the GPU
+    (src/models/flow/augment.py), so the 4 Kaggle CPUs no longer bottleneck training."""
 
-    def __init__(self, base, row_of: dict[str, int], reference_aug: bool = True):
-        self.base, self.row_of, self.reference_aug = base, row_of, reference_aug
+    def __init__(self, base, row_of: dict[str, int]):
+        self.base, self.row_of = base, row_of
+        inner, self.indices = base, None
+        if isinstance(base, Subset):
+            inner, self.indices = base.dataset, list(base.indices)
+        self.fast = isinstance(inner, ColorizationDataset)
+        self.inner = inner
 
     def __len__(self) -> int:
         return len(self.base)
 
     def __getitem__(self, idx: int) -> dict:
-        x = self.base[idx]
-        return {"row": self.row_of[x["id"]], "reference": x["reference"] if self.reference_aug else x["target"]}
+        if not self.fast:  # e.g. the list-based fake dataset in tests
+            x = self.base[idx]
+            return {"row": self.row_of[x["id"]], "target": x["target"]}
+        image_id = self.inner.ids[self.indices[idx] if self.indices is not None else idx]
+        img = read_image(find_image(self.inner.root, "reference", image_id), gray=False)
+        return {"row": self.row_of[image_id], "target": torch.from_numpy(img).permute(2, 0, 1).contiguous()}
+
+
+def to_unit(x: torch.Tensor) -> torch.Tensor:
+    """uint8 (0..255) or float [-1,1] images -> float [-1,1]."""
+    return x.float() / 127.5 - 1 if x.dtype == torch.uint8 else x.float()
 
 
 def load_latents(path: Path, device) -> tuple[dict[str, int], torch.Tensor, torch.Tensor]:
@@ -199,7 +218,7 @@ def main() -> None:
 
     latents_dir = args.latents or Path(tcfg["latents_dir"])
     row_of, z_sketch_all, z_target_all = load_latents(latents_dir / "train.pt", device)
-    dataset = LatentPairs(base, row_of, tcfg["reference_aug"])
+    dataset = LatentPairs(base, row_of)
     check_ids(base, row_of)
     val = ValProbe(build_dataset("val", "self_ref"), vae, ref_encoder, tcfg["num_val"], device)
     log = CSVLogger(out_dir / "log.csv")
@@ -220,7 +239,9 @@ def main() -> None:
             rows = batch["row"].to(device)
             z1 = z_target_all[rows].float()
             z_sketch = z_sketch_all[rows].float()
-            tokens = ref_encoder(batch["reference"].to(device, non_blocking=True))
+            target = to_unit(batch["target"].to(device, non_blocking=True))
+            reference = augment_reference_gpu(target) if tcfg["reference_aug"] else target
+            tokens = ref_encoder(reference)
             drop = torch.rand(tokens.shape[0], device=device) < tcfg["cond_drop_prob"]
             tokens = torch.where(drop.view(-1, 1, 1), net.null_cond(tokens.shape[0]).to(tokens.dtype), tokens)
             t = sample_t(z1.shape[0], device, tcfg["logit_normal"])
