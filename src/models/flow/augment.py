@@ -17,16 +17,20 @@ def _tps_kernel(r2: Tensor) -> Tensor:
 
 
 def tps_solve(src: Tensor, dst: Tensor) -> Tensor:
-    """Coefficients (B, n+3, 2) of the TPS mapping dst[i] -> src[i]; src (B,n,2), dst (n,2)."""
+    """Coefficients (B, n+3, 2) of the TPS mapping dst[i] -> src[i]; src (B,n,2), dst (n,2).
+
+    The system matrix depends only on the fixed control points dst, so it is inverted once on the CPU
+    (float64) and applied with a matmul on the device. torch.linalg.solve on CUDA fails on Kaggle's T4
+    ("no kernel image is available for execution on the device"), and a single small inverse is cheaper anyway."""
     n = dst.shape[0]
-    k = _tps_kernel(((dst[:, None] - dst[None]) ** 2).sum(-1))
-    p = torch.cat([torch.ones(n, 1, dtype=dst.dtype, device=dst.device), dst], 1)
-    a = torch.zeros(n + 3, n + 3, dtype=dst.dtype, device=dst.device)
+    d = dst.detach().to("cpu", torch.float64)
+    k = _tps_kernel(((d[:, None] - d[None]) ** 2).sum(-1))
+    p = torch.cat([torch.ones(n, 1, dtype=d.dtype), d], 1)
+    a = torch.zeros(n + 3, n + 3, dtype=d.dtype)
     a[:n, :n], a[:n, n:], a[n:, :n] = k, p, p.T
-    a = a + 1e-8 * torch.eye(n + 3, dtype=dst.dtype, device=dst.device)
-    b = torch.zeros(src.shape[0], n + 3, 2, dtype=src.dtype, device=src.device)
-    b[:, :n] = src
-    return torch.linalg.solve(a.expand(src.shape[0], -1, -1), b)
+    a = a + 1e-8 * torch.eye(n + 3, dtype=d.dtype)
+    a_inv = torch.linalg.inv(a)[:, :n].to(src.device)  # rhs rows n.. are zero
+    return (a_inv @ src.double()).to(src.dtype)        # (B, n+3, n) x (B, n, 2): tiny, float64 for accuracy
 
 
 def tps_apply(coef: Tensor, dst: Tensor, pts: Tensor) -> Tensor:
@@ -72,8 +76,12 @@ def augment_reference_gpu(img: Tensor, grid: int = 4, tps_strength: float = 0.06
     noise = torch.randn(b, grid * grid, 2, generator=generator, device=dev) * (tps_strength * min(h, w))
     corners = torch.tensor([0, grid - 1, grid * (grid - 1), grid * grid - 1], device=dev)
     noise[:, corners] = 0
-    coef = tps_solve(dst + noise, dst)
-    src = tps_apply(coef, dst, torch.stack([qx, qy], -1).view(b, -1, 2)).view(b, h, w, 2)
+    # Solved in coordinates scaled to [0, 1]: the TPS interpolant is scale-invariant, and the small system is
+    # far better conditioned than in pixel units (needed for the float32 matmul with the precomputed inverse).
+    s = float(max(h, w) - 1)
+    coef = tps_solve((dst + noise) / s, dst / s)
+    pts = torch.stack([qx, qy], -1).view(b, -1, 2) / s
+    src = (tps_apply(coef, dst / s, pts) * s).view(b, h, w, 2)
 
     # Sample with border replication (cv2.BORDER_REPLICATE), pixel coords -> [-1, 1].
     norm = torch.stack([src[..., 0] / (w - 1), src[..., 1] / (h - 1)], -1) * 2 - 1
