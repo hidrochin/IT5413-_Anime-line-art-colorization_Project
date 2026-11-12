@@ -27,7 +27,7 @@ train:
   learning_rate: 1.0e-4
   weight_decay: 0.0
   warmup_steps: 1000
-  max_steps: 150000       # re-estimate from it_s in log.csv after the first session (budget ~50 GPU-h)
+  max_steps: 120000       # re-estimate from it_s in log.csv after the first session (budget ~50 GPU-h)
   ema_decay: 0.9999
   cond_drop_prob: 0.1
   logit_normal: true
