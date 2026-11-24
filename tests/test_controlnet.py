@@ -6,7 +6,26 @@ import pytest
 import torch
 from diffusers.models.embeddings import ImageProjection
 
-from src.models.controlnet.colorizer import ControlNetColorizer, ControlNetConfig, downsample, prepare_control
+from src.models.controlnet.colorizer import (ControlNetColorizer, ControlNetConfig, downsample, encode_text,
+                                             prepare_control)
+
+
+class FakeTokenizer:
+    model_max_length = 8
+
+    def __call__(self, text, padding, max_length, truncation, return_tensors):
+        ids = [min(ord(c), 99) for c in text][:max_length]
+        return SimpleNamespace(input_ids=torch.tensor([ids + [0] * (max_length - len(ids))]))
+
+
+def tiny_text_encoder():
+    """A real CLIPTextModel (random weights) with the installed transformers' module layout."""
+    from transformers import CLIPTextConfig, CLIPTextModel
+
+    torch.manual_seed(0)
+    return CLIPTextModel(CLIPTextConfig(hidden_size=16, intermediate_size=32, num_hidden_layers=3, num_attention_heads=2,
+                                        vocab_size=100, max_position_embeddings=8, bos_token_id=0, eos_token_id=1,
+                                        pad_token_id=0)).eval()
 
 
 class FakePipe:
@@ -14,6 +33,7 @@ class FakePipe:
         proj = ImageProjection(image_embed_dim=8, cross_attention_dim=8, num_image_text_embeds=1)
         self.unet = SimpleNamespace(encoder_hid_proj=SimpleNamespace(image_projection_layers=[proj]))
         self.device = torch.device("cpu")
+        self.tokenizer, self.text_encoder = FakeTokenizer(), tiny_text_encoder()
         self.ip_scale = None
         self.calls = []
 
@@ -26,8 +46,10 @@ class FakePipe:
         return pos, torch.zeros_like(pos)
 
     def __call__(self, **kw):
+        assert "clip_skip" not in kw and "prompt" not in kw  # diffusers' clip_skip path breaks on transformers 5
         self.calls.append(kw)
-        b = len(kw["prompt"])
+        b = kw["prompt_embeds"].shape[0]
+        assert kw["negative_prompt_embeds"].shape == kw["prompt_embeds"].shape
         return SimpleNamespace(images=torch.rand(b, 3, 512, 512))
 
 
@@ -63,6 +85,41 @@ def test_colorize_contract():
     assert embeds[:3].abs().sum() == 0 and (embeds[3:] == 1).all()
     colorizer.colorize(torch.zeros(1, 1, 256, 256), torch.zeros(1, 3, 256, 256), seed=0, steps=3)
     assert pipe.calls[-1]["num_inference_steps"] == 3
+
+
+def test_encode_text_clip_skip():
+    pipe = FakePipe()
+    enc = pipe.text_encoder
+    ids = FakeTokenizer()("anime", None, 8, True, "pt").input_ids
+    with torch.no_grad():
+        hidden = enc(ids, output_hidden_states=True).hidden_states
+        last = enc(ids)[0]
+    norm = enc.text_model.final_layer_norm if hasattr(enc, "text_model") else enc.final_layer_norm
+    assert torch.allclose(encode_text(pipe, "anime", None), last)
+    assert torch.allclose(encode_text(pipe, "anime", 1), norm(hidden[-2]))  # CLIP skip 2 = penultimate layer
+    assert not torch.allclose(encode_text(pipe, "anime", 1), last)
+    # transformers 4 layout (final_layer_norm under .text_model) gives the same result
+    class Enc4:
+        device = enc.device
+        text_model = SimpleNamespace(final_layer_norm=norm)
+
+        def __call__(self, *args, **kwargs):
+            return enc(*args, **kwargs)
+
+    v4 = SimpleNamespace(tokenizer=pipe.tokenizer, text_encoder=Enc4())
+    assert torch.allclose(encode_text(v4, "anime", 1), norm(hidden[-2]))
+
+
+def test_text_embeds_cached_and_batched():
+    colorizer, pipe = make()
+    colorizer.colorize(torch.zeros(3, 1, 256, 256), torch.zeros(3, 3, 256, 256), seed=0)
+    kw = pipe.calls[-1]
+    assert kw["prompt_embeds"].shape == (3, 8, 16)
+    assert torch.equal(kw["prompt_embeds"][0], kw["prompt_embeds"][2])
+    assert not torch.equal(kw["prompt_embeds"], kw["negative_prompt_embeds"])
+    assert len(colorizer._text) == 2  # prompt + negative prompt, encoded once
+    colorizer.colorize(torch.zeros(1, 1, 256, 256), torch.zeros(1, 3, 256, 256), seed=1)
+    assert len(colorizer._text) == 2
 
 
 def test_no_cfg_embeds():

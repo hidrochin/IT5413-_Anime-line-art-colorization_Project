@@ -95,6 +95,24 @@ def build_pipeline(cfg: ControlNetConfig):
 
 
 @torch.no_grad()
+def encode_text(pipe, text: str, clip_skip: int | None) -> Tensor:
+    """(1, 77, D) CLIP text embeddings of `text`, shared by inference and LoRA training.
+
+    CLIP skip is done here, not through the pipeline's `clip_skip`: diffusers (0.42) reads
+    `text_encoder.text_model.final_layer_norm`, which transformers 5 removed (the layer norm now sits on
+    CLIPTextModel itself). Same definition: the hidden state `clip_skip` layers before the last, then the
+    final layer norm. Applied to the positive and the negative prompt alike."""
+    enc = pipe.text_encoder
+    ids = pipe.tokenizer(text, padding="max_length", max_length=pipe.tokenizer.model_max_length, truncation=True,
+                         return_tensors="pt").input_ids.to(enc.device)
+    if not clip_skip:
+        return enc(ids)[0]
+    hidden = enc(ids, output_hidden_states=True).hidden_states[-(clip_skip + 1)]
+    norm = enc.text_model.final_layer_norm if hasattr(enc, "text_model") else enc.final_layer_norm
+    return norm(hidden)
+
+
+@torch.no_grad()
 def encode_reference(pipe, reference: Tensor) -> tuple[Tensor, Tensor]:
     """(B,3,H,W) in [-1,1] -> (positive, negative) IP-Adapter embeddings, each (B, 1, ...).
     Shared by inference and LoRA training so both see identical reference features."""
@@ -119,6 +137,7 @@ class ControlNetColorizer(Colorizer):
             cfg = ControlNetConfig.from_dict(cfg)
         self.cfg = cfg or ControlNetConfig()
         self.pipe = pipe if pipe is not None else build_pipeline(self.cfg)
+        self._text: dict[tuple, Tensor] = {}
         self.set_params(ip_adapter_scale=self.cfg.ip_adapter_scale, lora_scale=self.cfg.lora_scale)
 
     def set_params(self, **kwargs) -> None:
@@ -150,6 +169,13 @@ class ControlNetColorizer(Colorizer):
         pos, neg = encode_reference(self.pipe, reference)
         return [torch.cat([neg, pos]) if self.do_cfg else pos]
 
+    def text_embeds(self, text: str) -> Tensor:
+        """encode_text, cached: the prompts are fixed, so they are encoded once per (text, clip_skip)."""
+        key = (text, self.cfg.clip_skip)
+        if key not in self._text:
+            self._text[key] = encode_text(self.pipe, text, self.cfg.clip_skip)
+        return self._text[key]
+
     @torch.no_grad()
     def colorize(self, sketch: Tensor, reference: Tensor, seed: int, steps: int | None = None) -> Tensor:
         b = sketch.shape[0]
@@ -157,14 +183,13 @@ class ControlNetColorizer(Colorizer):
         # (sketch, reference, seed), not on its batch neighbours or the GPU model.
         generators = [torch.Generator("cpu").manual_seed(seed) for _ in range(b)]
         images = self.pipe(
-            prompt=[self.cfg.prompt] * b,
-            negative_prompt=[self.cfg.negative_prompt] * b,
+            prompt_embeds=self.text_embeds(self.cfg.prompt).expand(b, -1, -1),
+            negative_prompt_embeds=self.text_embeds(self.cfg.negative_prompt).expand(b, -1, -1),
             image=prepare_control(sketch, self.cfg.invert_sketch),
             ip_adapter_image_embeds=self.ip_adapter_embeds(reference),
             num_inference_steps=steps or self.cfg.steps,
             guidance_scale=self.cfg.guidance_scale,
             controlnet_conditioning_scale=self.cfg.controlnet_scale,
-            clip_skip=self.cfg.clip_skip,
             height=INTERNAL_SIZE,
             width=INTERNAL_SIZE,
             generator=generators,
