@@ -16,10 +16,13 @@ def to_uint8(img: Tensor) -> np.ndarray:
 
 
 def save_png(img: Tensor, path: str | Path) -> None:
-    """Save a (C,H,W) tensor in [-1,1] as PNG, creating parent folders."""
+    """Save a (C,H,W) tensor in [-1,1] as PNG, creating parent folders. Written to a temp file and renamed,
+    so a session killed mid-write never leaves a truncated PNG that sample.py would then skip as done."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(to_uint8(img)).save(path)
+    tmp = path.with_name(path.name + ".tmp")
+    Image.fromarray(to_uint8(img)).save(tmp, format="PNG")
+    tmp.replace(path)
 
 
 def load_png(path: str | Path, mode: str = "RGB") -> Tensor:

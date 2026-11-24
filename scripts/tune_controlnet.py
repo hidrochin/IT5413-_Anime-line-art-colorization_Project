@@ -12,6 +12,7 @@ settings already in that file, so an interrupted Kaggle session resumes where it
 import argparse
 import gc
 import json
+import time
 from pathlib import Path
 
 import numpy as np
@@ -72,7 +73,10 @@ def main() -> None:
     parser.add_argument("--dataset", default=DEFAULT_DATASET)
     parser.add_argument("--num-images", type=int, default=None, help="override tune.num_images")
     parser.add_argument("--out", type=Path, default=Path("results/tune_controlnet.csv"))
+    parser.add_argument("--max-minutes", type=float, default=None,
+                        help="start no new setting after this long (Kaggle limit); rerun to resume from the CSV")
     args = parser.parse_args()
+    deadline = None if args.max_minutes is None else time.time() + 60 * args.max_minutes
 
     cfg = yaml.safe_load(args.config.read_text())
     tune = cfg["tune"]
@@ -83,9 +87,11 @@ def main() -> None:
 
     done: dict[str, dict] = {}
     if args.out.exists():
-        for row in pd.read_csv(args.out).to_dict("records"):
-            done[row["key"]] = row
-        print(f"resuming: {len(done)} settings already scored in {args.out}")
+        rows = pd.read_csv(args.out).to_dict("records")
+        # Scores on a different number of images (e.g. a --num-images smoke run) are not comparable: redo them.
+        done = {row["key"]: row for row in rows if row["n_images"] == len(samples)}
+        print(f"resuming: {len(done)} settings already scored on {len(samples)} images in {args.out}"
+              f" ({len(rows) - len(done)} rows with another n_images dropped)")
 
     current = dict(cfg["model"])
     lpips_fn = LPIPS(device=current["device"])
@@ -97,6 +103,9 @@ def main() -> None:
             setting = {**current, param: value}
             key = setting_key(setting, order)
             if key not in done:
+                if deadline is not None and time.time() >= deadline:
+                    print(f"time limit reached after {len(done)} settings; rerun to resume (no best yaml written)")
+                    return
                 rebuild_on = {k: setting[k] for k in REBUILD_KEYS}
                 if colorizer is None or rebuild_on != built_for:
                     colorizer = None

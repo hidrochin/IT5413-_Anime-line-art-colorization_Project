@@ -83,9 +83,11 @@ def sync() -> None:
 
 
 def sample_mode(colorizer: Colorizer, dataset, out_dir: Path, seeds: list[int], steps: int | None,
-                batch_size: int, num_workers: int, device: str, overwrite: bool) -> tuple[int, float]:
-    """Write every missing <id>_s<seed>.png. Returns (images timed, seconds) for the speed estimate;
-    the first colorize call is warm-up (lazy init, cuDNN autotune) and only counts if it is the only one."""
+                batch_size: int, num_workers: int, device: str, overwrite: bool,
+                deadline: float | None = None) -> tuple[int, float]:
+    """Write every missing <id>_s<seed>.png, stopping early once time.time() passes `deadline`. Returns
+    (images timed, seconds) for the speed estimate; the first colorize call is warm-up (lazy init, cuDNN
+    autotune) and only counts if it is the only one."""
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     timings: list[tuple[int, float]] = []
     for batch in tqdm(loader, desc=out_dir.parent.name + "/" + out_dir.name):
@@ -96,6 +98,9 @@ def sample_mode(colorizer: Colorizer, dataset, out_dir: Path, seeds: list[int], 
             paths = [out_dir / f"{i}_s{seed}.png" for i in ids]
             if not overwrite and all(p.exists() for p in paths):
                 continue
+            if deadline is not None and time.time() >= deadline:
+                print(f"{out_dir}: time limit reached; rerun to continue (existing PNGs are skipped)")
+                return speed_totals(timings)
             sync()
             t0 = time.perf_counter()
             out = colorizer.colorize(sketch, reference, seed=seed, steps=steps)
@@ -107,6 +112,10 @@ def sample_mode(colorizer: Colorizer, dataset, out_dir: Path, seeds: list[int], 
             timings.append((len(ids), dt))
             for img, path in zip(out.clamp(-1, 1).cpu(), paths):
                 save_png(img, path)
+    return speed_totals(timings)
+
+
+def speed_totals(timings: list[tuple[int, float]]) -> tuple[int, float]:
     timed = timings[1:] or timings
     return sum(n for n, _ in timed), sum(t for _, t in timed)
 
@@ -136,7 +145,10 @@ def main() -> None:
     parser.add_argument("--dataset", default=DEFAULT_DATASET, help="factory 'module:attr' called as f(split, mode)")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--max-minutes", type=float, default=None,
+                        help="stop starting new batches after this long (Kaggle limit); rerun to continue")
     args = parser.parse_args()
+    deadline = None if args.max_minutes is None else time.time() + 60 * args.max_minutes
 
     if not set(args.seeds) <= set(SEEDS):
         warnings.warn(f"--seeds {args.seeds} are not all in SEEDS={SEEDS}; outputs won't match other models")
@@ -157,9 +169,9 @@ def main() -> None:
             dataset = torch.utils.data.Subset(dataset, range(min(args.limit, len(dataset))))
         out_dir = args.outputs_dir / run / mode
         n, sec = sample_mode(colorizer, dataset, out_dir, args.seeds, args.steps, args.batch_size,
-                             args.num_workers, args.device, args.overwrite)
+                             args.num_workers, args.device, args.overwrite, deadline)
         if n == 0:
-            print(f"{out_dir}: all outputs already exist")
+            print(f"{out_dir}: nothing new written")
             continue
         row = {"model": run, "steps": steps_used, "nfe": colorizer.nfe(args.steps),
                "sec_per_image": round(sec / n, 5), "gpu": gpu_name()}

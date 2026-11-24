@@ -115,6 +115,10 @@ def test_sample_writes_contract_and_resumes(tmp_path, monkeypatch):
     assert (tmp_path / "out/toy_steps2/self_ref/test000_s1.png").exists()
     assert pd.read_csv(tmp_path / "res/speed.csv").iloc[-1].to_dict()["model"] == "toy_steps2"
 
+    run_sample(monkeypatch, *common, "--mode", "self_ref", "--model", "toy_late", "--max-minutes", "0")
+    assert not (tmp_path / "out/toy_late").exists()  # out of time before the first batch
+    assert not list((tmp_path / "out").rglob("*.tmp"))  # PNGs are renamed into place
+
 
 def test_resolve_colorizer_by_prefix():
     with pytest.raises(ValueError, match="cannot pick"):
