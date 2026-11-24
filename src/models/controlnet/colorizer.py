@@ -124,6 +124,24 @@ def encode_reference(pipe, reference: Tensor) -> tuple[Tensor, Tensor]:
     return pos.unsqueeze(1), neg.unsqueeze(1)
 
 
+def keep_per_sample_ip_embeds(pipe) -> None:
+    """Make the pipeline use our `ip_adapter_image_embeds` as given.
+
+    diffusers (0.42) assumes one reference for the whole batch: `__call__` passes `batch_size` as the repeat
+    count to `prepare_ip_adapter_image_embeds`, which turns our B per-sample embeddings into B*B, and the
+    IP attention's `.view(batch, -1, ...)` then folds them back so that every sample attends to every
+    reference in its batch (seen on Kaggle: outputs took the mixed colors of their batch). Our embeddings
+    already have the final per-sample layout ([negatives; positives] under CFG, see `ip_adapter_embeds`).
+    LoRA training calls the U-Net directly and never goes through this function."""
+
+    def prepare(ip_adapter_image, ip_adapter_image_embeds, device, num_images_per_prompt, do_classifier_free_guidance):
+        if ip_adapter_image_embeds is None:
+            raise ValueError("pass per-sample ip_adapter_image_embeds (ControlNetColorizer.ip_adapter_embeds)")
+        return [e.to(device) for e in ip_adapter_image_embeds]
+
+    pipe.prepare_ip_adapter_image_embeds = prepare
+
+
 def check_ip_adapter(unet) -> None:
     if not any("IPAdapter" in type(p).__name__ for p in unet.attn_processors.values()):
         raise RuntimeError("IP-Adapter attention processors are missing: the reference would be ignored")
@@ -137,6 +155,7 @@ class ControlNetColorizer(Colorizer):
             cfg = ControlNetConfig.from_dict(cfg)
         self.cfg = cfg or ControlNetConfig()
         self.pipe = pipe if pipe is not None else build_pipeline(self.cfg)
+        keep_per_sample_ip_embeds(self.pipe)
         self._text: dict[tuple, Tensor] = {}
         self.set_params(ip_adapter_scale=self.cfg.ip_adapter_scale, lora_scale=self.cfg.lora_scale)
 
