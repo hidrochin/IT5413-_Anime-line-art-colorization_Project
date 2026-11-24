@@ -2,6 +2,7 @@
 
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 import torch
 from diffusers.models.embeddings import ImageProjection
@@ -134,6 +135,41 @@ def test_set_params():
     assert pipe.ip_scale == 0.9 and colorizer.cfg.controlnet_scale == 0.5
     with pytest.raises(ValueError, match="new pipeline"):
         colorizer.set_params(base_model="x")
+
+
+def test_check_controlnet_script(tmp_path, monkeypatch):
+    import sys
+
+    import pandas as pd
+
+    import scripts.check_controlnet as check
+
+    class EchoPipe(FakePipe):
+        """'Colors' each sample with the mean of its IP-Adapter embedding row, so outputs follow references."""
+
+        def encode_image(self, images, device, n, hidden):
+            pos = torch.stack([torch.tensor(np.asarray(im), dtype=torch.float32).mean() for im in images])[:, None] / 255
+            return pos.repeat(1, 8), torch.zeros(len(images), 8)
+
+        def __call__(self, **kw):
+            super().__call__(**kw)
+            emb = kw["ip_adapter_image_embeds"][0]
+            pos = emb[emb.shape[0] // 2:] if kw["guidance_scale"] > 1 else emb
+            level = pos[:, 0, 0].clamp(0, 1) * (self.ip_scale or 0)
+            return SimpleNamespace(images=level.view(-1, 1, 1, 1).expand(-1, 3, 512, 512).clone())
+
+    monkeypatch.setattr(check, "ControlNetColorizer",
+                        lambda cfg: ControlNetColorizer(ControlNetConfig.from_dict({**vars(cfg), "device": "cpu"}),
+                                                        pipe=EchoPipe()))
+    monkeypatch.setattr(sys, "argv", ["check", "--dataset", "tests.fake_data:build_dataset", "--num-images", "4",
+                                      "--batch-size", "2", "--results-dir", str(tmp_path), "--set", "device=cpu"])
+    check.main()
+    row = pd.read_csv(tmp_path / "check_controlnet.csv").iloc[-1]
+    assert row["batch_diff"] < 1e-6 and row["n"] == 4
+    assert (tmp_path / "figures/check_controlnet_default.png").exists()
+    with pytest.raises(ValueError, match="val only"):
+        monkeypatch.setattr(sys, "argv", ["check", "--split", "test"])
+        check.main()
 
 
 def test_config_rejects_unknown_keys():
