@@ -1,0 +1,39 @@
+# Model A: reference-conditioned pix2pix GAN (U-Net G on [S; warped R], 70x70 PatchGAN D on [S; Y]), from scratch.
+# `model:` maps 1:1 to GanConfig (src/models/gan/colorizer.py), used by scripts/sample.py.
+# `arch:` maps 1:1 to GanNetConfig (src/models/gan/networks.py), used by scripts/train_gan.py
+#   (the architecture is stored in every checkpoint, so sampling never reads this section).
+# `train:` is read by scripts/train_gan.py (see DEFAULTS there).
+name: gan
+
+model:
+  checkpoint: checkpoints/gan/gan_best.pt   # best val LPIPS; or gan_G.pt / a checkpoints/ folder / step_*.pt
+  test_dropout: true      # dropout on at test time = A's only randomness; false = deterministic (ablation)
+  dtype: float32
+  device: cuda
+
+arch:
+  ngf: 64
+  ndf: 64
+  num_downs: 8
+  n_layers_d: 3
+  dropout: 0.5
+
+train:
+  output_dir: checkpoints/gan
+  batch_size: 16
+  learning_rate: 2.0e-4
+  betas: [0.5, 0.999]
+  max_steps: 60000        # ~30 epochs of the 31k original pairs; re-estimate from it_s in log.csv (budget ~15 GPU-h)
+  lr_decay_start: 30000   # constant lr, then linear to 0 (pix2pix)
+  lambda_l1: 100.0
+  lambda_vgg: 10.0
+  gpu_warp: true
+  reference_aug: true     # ablation "no warp": false
+  amp: true
+  num_workers: 4
+  seed: 0
+  log_every: 100
+  val_every: 2000
+  num_val: 200
+  val_batch: 16
+  ckpt_every_min: 30
