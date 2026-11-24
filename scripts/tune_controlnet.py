@@ -30,7 +30,7 @@ from src.utils.image_io import to_uint8
 from src.utils.registry import DEFAULT_DATASET, load_object
 
 LOWER_IS_BETTER = {"lpips": True, "psnr": False, "ssim": False, "edge_f1": False}
-REBUILD_KEYS = {"base_model"}
+REBUILD_KEYS = {"base_model", "ip_adapter_weight"}  # need new weights, so a new pipeline
 
 
 def load_val(dataset_spec: str, split: str, n: int) -> list[dict]:

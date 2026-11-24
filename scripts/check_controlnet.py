@@ -10,7 +10,7 @@ Prints, and appends to results/check_controlnet.csv:
     match           the same with the IP-Adapter on (configured scale)
     match_swapped   references rolled by one image: how often the output is closest to the reference it was
                     *given* (not its own ground truth). Chance level for the three match rates is 1/n.
-Grid (results/figures/check_controlnet_<name>.png), one row per image:
+Grid (results/figures/check_controlnet_<name>.jpg, half size, small enough to commit), one row per image:
     sketch | reference | IP off | IP on | swapped reference | output with it | ground truth
 """
 
@@ -21,7 +21,8 @@ import numpy as np
 import pandas as pd
 import torch
 import yaml
-from torchvision.utils import save_image
+from PIL import Image
+from torchvision.utils import make_grid
 
 from scripts.sample import parse_overrides
 from src.metrics.reference import color_distance
@@ -93,10 +94,11 @@ def main() -> None:
     csv_path = args.results_dir / "check_controlnet.csv"
     pd.DataFrame([row]).to_csv(csv_path, mode="a", header=not csv_path.exists(), index=False)
     cols = [sketch.repeat(1, 3, 1, 1), reference, ip0, out, reference[rolled], swapped, target]
-    grid = torch.stack([c[i] for i in range(n) for c in cols])
-    grid_path = args.results_dir / "figures" / f"check_controlnet_{args.name}.png"
+    grid = make_grid(torch.stack([c[i] for i in range(n) for c in cols]), nrow=len(cols), pad_value=-1)
+    image = Image.fromarray(to_uint8(grid))
+    grid_path = args.results_dir / "figures" / f"check_controlnet_{args.name}.jpg"
     grid_path.parent.mkdir(parents=True, exist_ok=True)
-    save_image(grid * 0.5 + 0.5, grid_path, nrow=len(cols))
+    image.resize((image.width // 2, image.height // 2), Image.LANCZOS).save(grid_path, quality=85)
     print(f"grid -> {grid_path}, row appended to {csv_path}")
 
 

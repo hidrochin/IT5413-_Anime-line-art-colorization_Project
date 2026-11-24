@@ -168,7 +168,7 @@ def test_check_controlnet_script(tmp_path, monkeypatch):
     check.main()
     row = pd.read_csv(tmp_path / "check_controlnet.csv").iloc[-1]
     assert row["batch_diff"] < 1e-6 and row["n"] == 4
-    assert (tmp_path / "figures/check_controlnet_default.png").exists()
+    assert (tmp_path / "figures/check_controlnet_default.jpg").exists()
     with pytest.raises(ValueError, match="val only"):
         monkeypatch.setattr(sys, "argv", ["check", "--split", "test"])
         check.main()

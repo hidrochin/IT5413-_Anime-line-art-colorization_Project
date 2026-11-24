@@ -1,0 +1,5 @@
+name,n,ip_adapter_weight,ip_adapter_scale,controlnet_scale,guidance_scale,steps,batch_diff,match_ip0,match,match_swapped,chance
+base,8,ip-adapter_sd15.bin,0.6,1.0,7.0,20,0.005707858130335808,0.125,0.5,0.375,0.125
+base_ip1.0,8,ip-adapter_sd15.bin,1.0,1.0,7.0,20,0.004505964461714029,0.125,0.625,0.5,0.125
+plus,8,ip-adapter-plus_sd15.bin,0.6,1.0,7.0,20,0.003062125062569976,0.125,0.75,0.625,0.125
+plus_ip1.0,8,ip-adapter-plus_sd15.bin,1.0,1.0,7.0,20,0.0039267330430448055,0.125,0.75,0.5,0.125
