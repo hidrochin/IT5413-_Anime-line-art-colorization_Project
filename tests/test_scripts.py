@@ -68,6 +68,16 @@ def test_tune_coordinate_search_and_resume(tmp_path, monkeypatch):
     run_main(monkeypatch, tune, "--config", str(cfg_path), "--out", str(out))
     assert len(pd.read_csv(out)) == n_rows  # second run is fully resumed from the CSV
 
+    built = FakeColorizer.built
+    run_main(monkeypatch, tune, "--config", str(cfg_path), "--out", str(out), "--num-images", "3")
+    assert FakeColorizer.built == built + 1  # scores on 2 images are not reused for 3
+    assert set(pd.read_csv(out)["n_images"]) == {3} and len(pd.read_csv(out)) == n_rows
+
+    best_yaml = tmp_path / "results/tune_controlnet_best.yaml"
+    best_yaml.unlink()
+    run_main(monkeypatch, tune, "--config", str(cfg_path), "--out", str(out), "--num-images", "4", "--max-minutes", "0")
+    assert not best_yaml.exists()  # out of time: no partial winner is written
+
 
 def test_export_eval_assets(tmp_path, monkeypatch):
     import scripts.export_eval_assets as export
