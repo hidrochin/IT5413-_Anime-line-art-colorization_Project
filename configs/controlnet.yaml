@@ -7,7 +7,7 @@ model:
   controlnet: lllyasviel/control_v11p_sd15s2_lineart_anime
   ip_adapter_repo: h94/IP-Adapter
   ip_adapter_subfolder: models
-  ip_adapter_weight: ip-adapter_sd15.bin   # fallback if colors are ignored: ip-adapter-plus_sd15.bin
+  ip_adapter_weight: ip-adapter_sd15.bin   # base vs Plus is tuned on val (tune.grid.ip_adapter_weight)
   ip_adapter_scale: 0.6
   controlnet_scale: 1.0
   guidance_scale: 7.0
@@ -29,11 +29,14 @@ tune:
   batch_size: 4
   seed: 0
   select_by: lpips          # lower is better
-  order: [base_model, ip_adapter_scale, controlnet_scale, guidance_scale, steps]
+  order: [base_model, ip_adapter_weight, ip_adapter_scale, controlnet_scale, guidance_scale, steps]
   grid:
     base_model:
       - stable-diffusion-v1-5/stable-diffusion-v1-5
       # - <anime SD1.5 base in diffusers format>  # add one here; pick on val (CLAUDE.md open question)
+    # Reference check on 8 val images (results/check_controlnet.csv, after the batch-leak fix): own-reference
+    # color match 0.50 (base) vs 0.75 (Plus) at scale 0.6, chance 0.125. Too few images to decide by hand.
+    ip_adapter_weight: [ip-adapter_sd15.bin, ip-adapter-plus_sd15.bin]
     ip_adapter_scale: [0.4, 0.6, 0.8, 1.0]
     controlnet_scale: [0.6, 0.8, 1.0, 1.2]
     guidance_scale: [3.0, 5.0, 7.0, 9.0]

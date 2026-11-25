@@ -25,7 +25,8 @@ import torch.nn.functional as F
 import yaml
 from torch.utils.data import DataLoader
 
-from src.models.controlnet.colorizer import ControlNetConfig, build_pipeline, encode_reference, prepare_control, upsample
+from src.models.controlnet.colorizer import (ControlNetConfig, build_pipeline, encode_reference, encode_text,
+                                             prepare_control, upsample)
 from src.utils.checkpoint import EpochSampler, rng_state, set_rng_state
 from src.utils.registry import DEFAULT_DATASET, load_object
 from src.utils.seeding import seed_everything
@@ -87,8 +88,7 @@ def main() -> None:
     optimizer = torch.optim.AdamW(params, lr=lcfg["learning_rate"], weight_decay=lcfg["weight_decay"])
     scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")
     noise_scheduler = DDPMScheduler.from_pretrained(mcfg.base_model, subfolder="scheduler")
-    with torch.no_grad():
-        text, _ = pipe.encode_prompt(mcfg.prompt, device, 1, False, clip_skip=mcfg.clip_skip)
+    text = encode_text(pipe, mcfg.prompt, mcfg.clip_skip)  # same text conditioning as inference
 
     progress = {"step": 0, "epoch": 0, "batch_in_epoch": 0}
     if (out_dir / "state.pt").exists():
