@@ -9,7 +9,7 @@ import torch
 import yaml
 
 import scripts.tune_controlnet as tune
-from scripts.train_lora import EpochSampler
+from scripts.train_lora import EpochSampler, lora_config
 from tests.fake_data import FakeLPIPS
 
 
@@ -25,6 +25,25 @@ def test_epoch_sampler_resumes_same_order():
     assert list(s) == full[4:] and len(s) == 6
     s.set_position(1, 0)
     assert list(s) != full and sorted(s) == list(range(10))
+
+
+def test_lora_targets_unet_attention_not_ip_adapter():
+    """With the configs/controlnet.yaml settings, the LoRA wraps the U-Net attention but not the IP-Adapter
+    Plus resampler (encoder_hid_proj), which has to_q/k/v/out.0 layers of its own."""
+    from diffusers.models.embeddings import IPAdapterPlusImageProjection
+    from peft import inject_adapter_in_model
+
+    attn = lambda: torch.nn.ModuleDict({k: torch.nn.Linear(8, 8) for k in ("to_q", "to_k", "to_v")}
+                                       | {"to_out": torch.nn.ModuleList([torch.nn.Linear(8, 8)])})
+    unet = torch.nn.ModuleDict({
+        "down": torch.nn.ModuleDict({"attn2": attn()}),
+        "encoder_hid_proj": IPAdapterPlusImageProjection(embed_dims=8, output_dims=8, hidden_dims=8, depth=1,
+                                                         dim_head=4, heads=2, num_queries=2),
+    })
+    lcfg = yaml.safe_load(Path("configs/controlnet.yaml").read_text())["lora"]
+    inject_adapter_in_model(lora_config(lcfg), unet)
+    wrapped = {n.rsplit(".lora_A", 1)[0] for n, _ in unet.named_modules() if n.endswith("lora_A")}
+    assert wrapped == {"down.attn2.to_q", "down.attn2.to_k", "down.attn2.to_v", "down.attn2.to_out.0"}
 
 
 class FakeColorizer:
