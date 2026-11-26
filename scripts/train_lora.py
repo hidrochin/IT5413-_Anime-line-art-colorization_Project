@@ -32,6 +32,15 @@ from src.utils.registry import DEFAULT_DATASET, load_object
 from src.utils.seeding import seed_everything
 
 
+def lora_config(lcfg: dict):
+    """LoRA on the U-Net attention only. `exclude_modules` keeps it off the IP-Adapter Plus projection
+    (`encoder_hid_proj`), whose resampler also has to_q/k/v/out.0 layers: the IP-Adapter stays frozen."""
+    from peft import LoraConfig
+
+    return LoraConfig(r=lcfg["rank"], lora_alpha=lcfg["alpha"], init_lora_weights="gaussian",
+                      target_modules=lcfg["target_modules"], exclude_modules=lcfg.get("exclude_modules"))
+
+
 def save_state(out_dir: Path, unet, optimizer, scaler, progress: dict) -> None:
     from diffusers import StableDiffusionControlNetPipeline
     from diffusers.utils import convert_state_dict_to_diffusers
@@ -69,21 +78,21 @@ def main() -> None:
 
     from diffusers import DDPMScheduler
     from diffusers.training_utils import cast_training_params
-    from peft import LoraConfig
     from peft.utils import set_peft_model_state_dict
 
     pipe = build_pipeline(mcfg)
+    pipe.set_ip_adapter_scale(mcfg.ip_adapter_scale)  # load_ip_adapter leaves it at 1.0; train at the inference scale
     unet, vae, controlnet = pipe.unet, pipe.vae, pipe.controlnet
     for module in (unet, vae, controlnet, pipe.text_encoder, pipe.image_encoder):
         module.requires_grad_(False)
-    unet.add_adapter(LoraConfig(r=lcfg["rank"], lora_alpha=lcfg["alpha"], init_lora_weights="gaussian",
-                                target_modules=lcfg["target_modules"]))
+    unet.add_adapter(lora_config(lcfg))
     cast_training_params(unet, dtype=torch.float32)  # LoRA weights in fp32, frozen base stays fp16
     if lcfg["gradient_checkpointing"]:
         unet.enable_gradient_checkpointing()
     unet.train()
     params = [p for p in unet.parameters() if p.requires_grad]
-    print(f"trainable LoRA params: {sum(p.numel() for p in params) / 1e6:.2f}M")
+    print(f"trainable LoRA params: {sum(p.numel() for p in params) / 1e6:.2f}M "
+          f"({mcfg.ip_adapter_weight}, IP scale {mcfg.ip_adapter_scale}, ControlNet scale {mcfg.controlnet_scale})")
 
     optimizer = torch.optim.AdamW(params, lr=lcfg["learning_rate"], weight_decay=lcfg["weight_decay"])
     scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")

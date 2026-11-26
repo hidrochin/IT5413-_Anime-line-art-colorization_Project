@@ -84,7 +84,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "opencv-python-headless", specifier = ">=4.8" },
     { name = "pandas" },
-    { name = "peft", specifier = ">=0.11" },
+    { name = "peft", specifier = ">=0.14" },
     { name = "pillow" },
     { name = "pyyaml" },
     { name = "safetensors" },

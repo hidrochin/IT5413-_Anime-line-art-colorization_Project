@@ -4,7 +4,7 @@
 diffusers>=0.30
 transformers>=4.41
 accelerate>=0.30
-peft>=0.11
+peft>=0.14  # exclude_modules (LoRA kept off the IP-Adapter)
 safetensors
 lpips>=0.1.4
 torchmetrics>=1.3
