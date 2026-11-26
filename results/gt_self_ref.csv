@@ -1,0 +1,2 @@
+timestamp,model,mode,n_ids,n_seeds,psnr,ssim,ms_ssim,lpips,diversity,edge_precision,edge_recall,edge_f1,fid,fid_std,kid,kid_std,fd_dinov2,fd_dinov2_std
+2026-11-25T16:58:40,gt,self_ref,579,1,100.0,0.9999685883522034,0.9999942779541016,0.0,,0.9456888418329136,0.8567635615090365,0.8954077283169124,-3.066899017767355e-05,0.0,-0.0007780917803756893,0.0,-5.542268650060578e-05,0.0
