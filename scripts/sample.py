@@ -124,7 +124,8 @@ def main() -> None:
                         "plus _steps<N> when --steps is given)")
     parser.add_argument("--colorizer", default=None, help="'module:Class' (overrides the config's `colorizer:`)")
     parser.add_argument("--mode", nargs="+", default=["self_ref"], choices=MODES)
-    parser.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE", help="override `model:` entries")
+    parser.add_argument("--set", nargs="*", action="extend", default=[], metavar="KEY=VALUE",
+                        help="override `model:` entries; repeated --set flags add up")
     parser.add_argument("--steps", type=int, default=None, help="sampling steps (None = model default)")
     parser.add_argument("--split", default=None, help="default: each mode's test split (cross_ref -> test_cross)")
     parser.add_argument("--seeds", type=int, nargs="+", default=SEEDS)
