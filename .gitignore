@@ -1,2 +1,6 @@
 *.pdf
 CLAUDE.md
+.notebook-check-env/
+__pycache__/
+.env
+/scripts/download_dataset.py

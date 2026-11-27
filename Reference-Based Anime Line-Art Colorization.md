@@ -50,6 +50,24 @@ The noise z matters: a GAN mostly ignores it, while diffusion and flow models ar
 
 ## 2. Dataset
 
+**Subset decision (13 Nov 2026):** use the complete sketch/color pairs already
+downloaded locally instead of finishing the entire Hugging Face download.
+The notebook takes the intersection of sketch and color filenames, reports
+unpaired images and exports fixed grouped splits shared by all models. The local
+inspection found 80,345 pairs and 25,789 sketches without color targets; actual
+counts are recomputed by the notebook. This subset is not a random sample of
+the full repository, so conclusions apply to the selected paired subset.
+
+**Implementation update (25 Oct 2026):** the team selected
+[AnimeFaceColorization on Hugging Face](https://huggingface.co/datasets/ComputerVisionAnimeProject/AnimeFaceColorization)
+for the current notebook. It downloads `sketch/` and `reference/` at a pinned revision,
+then creates a fixed approximately 80/10/10 source-image-group split. Originals and
+their `_augN` variants remain in one split. `AnimeDiffusion_<id>` denotes a source
+image group, not a character ID. Actual counts are reported by the notebook;
+the original AnimeDiffusion counts and official split described below are the
+initial benchmark plan, not the split of the selected Hugging Face dataset.
+All three models should use the notebook's exported manifest and split files.
+
 The primary dataset is the [AnimeDiffusion benchmark](https://xq-meng.github.io/projects/AnimeDiffusion/) (Cao, Meng et al., IEEE TVCG 2024): paired anime-face line drawings and colored images, 31,696 for training and 579 for testing, at 256 × 256. The authors built it because no high-resolution anime-face colorization dataset existed.
 
 | Dataset | Role | Size | Access |
