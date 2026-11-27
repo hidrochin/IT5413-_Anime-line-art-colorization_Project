@@ -2,3 +2,4 @@ model,steps,nfe,sec_per_image,gpu
 controlnet,10,20,2.45609,Tesla T4
 controlnet,10,20,2.45462,Tesla T4
 controlnet,10,20,2.45123,Tesla T4
+controlnet_lora,10,20,2.37104,Tesla T4
