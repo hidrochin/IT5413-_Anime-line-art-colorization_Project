@@ -1,0 +1,18 @@
+model:
+  base_model: stable-diffusion-v1-5/stable-diffusion-v1-5
+  controlnet: lllyasviel/control_v11p_sd15s2_lineart_anime
+  ip_adapter_repo: h94/IP-Adapter
+  ip_adapter_subfolder: models
+  ip_adapter_weight: ip-adapter-plus_sd15.bin
+  ip_adapter_scale: 0.6
+  controlnet_scale: 1.0
+  guidance_scale: 3.0
+  steps: 10
+  clip_skip: 1
+  prompt: anime character face, flat colors, best quality
+  negative_prompt: lowres, worst quality, low quality, blurry, monochrome, grayscale
+  invert_sketch: true
+  lora_path: null
+  lora_scale: 1.0
+  dtype: float16
+  device: cuda
