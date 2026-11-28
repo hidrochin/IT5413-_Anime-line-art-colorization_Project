@@ -6,6 +6,7 @@ CLAUDE.md
 __pycache__/
 *.pyc
 .venv/
+.notebook-check-env/
 .pytest_cache/
 .ipynb_checkpoints/
 .DS_Store
@@ -16,4 +17,7 @@ __pycache__/
 /outputs/
 /checkpoints/
 /wandb/
+/gan/
+gan_result.ipynb
 .env
+/scripts/download_dataset.py

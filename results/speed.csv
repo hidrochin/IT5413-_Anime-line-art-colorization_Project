@@ -19,3 +19,7 @@ flow_w2.0,32,64,0.38378,Tesla T4
 flow_w3.0,32,64,0.38384,Tesla T4
 flow_w4.0,32,64,0.38416,Tesla T4
 flow_w6.0,32,64,0.38395,Tesla T4
+gan,1,1,0.00632,Tesla T4
+gan,1,1,0.00538,Tesla T4
+gan,1,1,0.00558,Tesla T4
+gan_nodrop,1,1,0.00549,Tesla T4

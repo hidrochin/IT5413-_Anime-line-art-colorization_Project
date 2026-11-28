@@ -112,16 +112,54 @@ uses fake data and downloads nothing.
 | | |
 | --- | --- |
 | Task | Line-art sketch + color reference → colored anime face |
-| Data | [AnimeDiffusion benchmark](https://xq-meng.github.io/projects/AnimeDiffusion/): 31,696 train / 579 test pairs, 256×256 |
+| Data | Selected: [AnimeFaceColorization (Hugging Face)](https://huggingface.co/datasets/ComputerVisionAnimeProject/AnimeFaceColorization), resized to 256×256; fixed source-group train/val/test split |
 | Model A | Reference-conditioned pix2pix GAN, trained from scratch |
 | Model B | Latent flow-matching model with DINOv2 reference cross-attention, trained from scratch |
 | Model C | Stable Diffusion 1.5 + ControlNet (line-art) + IP-Adapter, pretrained, zero-shot / optional LoRA |
 | Main question | Do diffusion-type models trade fidelity for diversity better than a GAN? |
 | Compute | Free Kaggle GPUs (T4/P100), 3 team members |
 
+## Model A: Kaggle notebook
+
+Open [`notebooks/model_a_reference_pix2pix_kaggle.ipynb`](notebooks/model_a_reference_pix2pix_kaggle.ipynb)
+in Kaggle and attach the paired dataset with **Add Input**. Set `DATA_ROOT` to
+the directory containing `sketch/` and `reference/`, or directly to
+`AnimeFaceColorization_paired.zip`. ZIP input is extracted once into Kaggle working
+storage and reused in the current session.
+
+The notebook reads attached data only. It contains no Hugging Face dataset download,
+token, login, or Secrets configuration. Internet is needed initially for pretrained
+VGG19/LPIPS weights if they are not already cached.
+
+Defaults train on 1,000 pairs for two epochs and export eight inputs with five seeds.
+After inspecting images/losses, use a new `RUN_NAME`, `TRAIN_LIMIT=None`, and
+`EPOCHS=30` for full training. Checkpoints support resuming between Kaggle sessions.
+
+The loader skips unpaired files and exports `splits/data_summary.json` plus shared
+manifest/split files. The approximately 80/10/10 split keeps source-image variants
+together. These are splits of the selected paired subset, not the official
+AnimeDiffusion benchmark. Notebook cells include Vietnamese explanations for the
+U-Net/PatchGAN, TPS references, losses, training, sampling and PNG-based evaluation.
+
+For downloading locally to `D:\AnimeFaceColorization`, run
+`python scripts/download_dataset.py` in an environment with `huggingface_hub`
+and `tqdm`. The local script uses its `HF_TOKEN` constant, validates it, then lists and downloads
+`sketch/` and `reference/` separately instead of scanning the whole repository root.
+It reuses the same local download cache when restarted. Windows must permit
+writing to the destination (use an Administrator PowerShell if required).
+The local downloader is excluded from Git because it contains a hardcoded credential.
+
+To package the selected pairs for Kaggle and remove unused local files, stop any
+active download and run `python scripts/package_paired_dataset.py` with write
+permission to `D:\AnimeFaceColorization`. It creates
+`D:\AnimeFaceColorization\AnimeFaceColorization_paired.zip`, verifies its file list,
+sizes and CRC, then deletes unmatched images and the `.cache` download directory.
+Matched raw images and README remain available. No source files are deleted if
+ZIP verification fails or the source changes during packaging.
+
 ## Planned repository structure
 
-No code exists yet; this is the target layout as it gets built out (see Section 10 of the design doc):
+Apart from the Model A notebook, this is the target layout as it gets built out (see Section 10 of the design doc):
 
 ```text
 .
